@@ -8,6 +8,7 @@ from PySide6.QtGui import QGuiApplication, QCursor, QPainter
 
 
 lc = QLoggingCategory("com.kyzivat.magnifier", QtMsgType.QtWarningMsg)
+lcwheel = QLoggingCategory("com.kyzivat.magnifier.wheel", QtMsgType.QtWarningMsg)
 lctimer = QLoggingCategory("com.kyzivat.magnifier.timer", QtMsgType.QtWarningMsg)
 
 
@@ -22,6 +23,10 @@ class ZoomWindow(QWidget):
 
         self._zoom_label = QLabel(self)
         self._layout.addWidget(self._zoom_label)
+        self._magnification_label = QLabel(self)
+        self._magnification_label.move(15, 5)
+
+        self.set_magnification(2)
 
         self._long_interval = 1000
         self._short_interval = 32
@@ -32,6 +37,10 @@ class ZoomWindow(QWidget):
         self._last_screen_pos = None
         self.setGeometry(0, 0, 500, 500)
 
+    def set_magnification(self, mag):
+        self._magnification = mag
+        self._magnification_label.setText(str(self._magnification))
+
     def enterEvent(self, event):
         qCDebug(lc, "enterEvent")
         #self.setWindowFlags(self.windowFlags() & ~Qt.FramelessWindowHint)
@@ -40,13 +49,19 @@ class ZoomWindow(QWidget):
         qCDebug(lc, "leaveEvent")
         #self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
 
-    def paintEvent(self, event):
-        if lc.isDebugEnabled():
-            painter = QPainter(self)
-            painter.setPen(Qt.white)
-            pen_width = painter.pen().width()
-            painter.drawRect(0, 0, self.width()-pen_width, self.height()-pen_width)
-        super().paintEvent(event)
+    def wheelEvent(self, event):
+        num_degrees = event.angleDelta()/8
+        num_steps = num_degrees/15
+
+        max_zoom = 20
+        mag = self._magnification + num_steps.y()
+        while mag > max_zoom or mag < 1:
+            if mag > max_zoom:
+                mag = mag-max_zoom
+            elif mag < 1:
+                mag = mag+max_zoom
+        self.set_magnification(mag)
+        qCDebug(lcwheel, f"num_degrees: {num_degrees}, num_steps: {num_steps}, new magnification: {self._magnification}")
 
     def _updateTimerInterval(self, cursor_pos):
         if self._last_screen_pos == cursor_pos:
@@ -83,7 +98,7 @@ class ZoomWindow(QWidget):
             return
         self._updateTimerInterval(local_pos)
 
-        grabsize = self._zoom_label.size()/3
+        grabsize = self._zoom_label.size()/self._magnification
         pixmap = screen.grabWindow(0, local_pos.x()-grabsize.width()/2,
                                    local_pos.y()-grabsize.height()/2, grabsize.width(),
                                    grabsize.height())
